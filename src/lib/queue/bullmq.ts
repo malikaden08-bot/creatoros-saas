@@ -1,78 +1,19 @@
-import { Queue, Worker, Job, QueueEvents } from 'bullmq';
-import Redis from 'ioredis';
 import { logger } from '../../services/logger';
 import { EventEmitter } from 'events';
+import {
+  QueueName,
+  QUEUE_NAMES,
+  QUEUE_CONFIGS,
+  DispatchedJobParams,
+  UnifiedJobSnapshot,
+  JobPriority
+} from './types';
 
-export type QueueName =
-  | 'image-generation'
-  | 'video-generation'
-  | 'subtitle-generation'
-  | 'seo-jobs'
-  | 'thumbnail-jobs'
-  | 'email-jobs';
-
-export const QUEUE_NAMES: QueueName[] = [
-  'image-generation',
-  'video-generation',
-  'subtitle-generation',
-  'seo-jobs',
-  'thumbnail-jobs',
-  'email-jobs'
-];
-
-export interface QueueConfig {
-  name: QueueName;
-  displayName: string;
-  concurrency: number;
-  maxRetries: number;
-}
-
-export const QUEUE_CONFIGS: Record<QueueName, QueueConfig> = {
-  'image-generation': { name: 'image-generation', displayName: 'Image Generation', concurrency: 5, maxRetries: 3 },
-  'video-generation': { name: 'video-generation', displayName: 'Video Generation', concurrency: 2, maxRetries: 3 },
-  'subtitle-generation': { name: 'subtitle-generation', displayName: 'Subtitle Generation', concurrency: 4, maxRetries: 3 },
-  'seo-jobs': { name: 'seo-jobs', displayName: 'SEO Jobs', concurrency: 5, maxRetries: 3 },
-  'thumbnail-jobs': { name: 'thumbnail-jobs', displayName: 'Thumbnail Jobs', concurrency: 5, maxRetries: 3 },
-  'email-jobs': { name: 'email-jobs', displayName: 'Email Jobs', concurrency: 10, maxRetries: 5 }
-};
-
-export type JobPriority = 1 | 2 | 3;
-
-export interface DispatchedJobParams {
-  queueName: QueueName;
-  jobName: string;
-  data: Record<string, any>;
-  priority?: JobPriority;
-  retries?: number;
-  userId?: string;
-}
-
-export interface UnifiedJobSnapshot {
-  id: string;
-  queueName: QueueName;
-  name: string;
-  data: Record<string, any>;
-  progress: number;
-  priority: JobPriority;
-  attemptsMade: number;
-  maxRetries: number;
-  status: 'queued' | 'active' | 'completed' | 'failed' | 'cancelled';
-  errorReason?: string;
-  timestamp: string;
-  completedTimestamp?: string;
-}
-
-function getRedisConnection(): Redis {
-  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-  return new Redis(redisUrl, {
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false
-  });
-}
+export * from './types';
 
 export class CreatorOSQueueManager {
   private static instance: CreatorOSQueueManager;
-  private queues: Map<QueueName, Queue> = new Map();
+  private queues: Map<string, any> = new Map();
   private inMemoryJobs: Map<string, UnifiedJobSnapshot> = new Map();
   public notificationEmitter: EventEmitter = new EventEmitter();
 
@@ -88,25 +29,40 @@ export class CreatorOSQueueManager {
     return CreatorOSQueueManager.instance;
   }
 
-  private initializeQueues() {
-    QUEUE_NAMES.forEach((queueName) => {
-      try {
-        const connection = getRedisConnection();
-        const queue = new Queue(queueName, {
-          connection,
-          defaultJobOptions: {
-            attempts: QUEUE_CONFIGS[queueName].maxRetries,
-            backoff: { type: 'exponential', delay: 1000 },
-            removeOnComplete: 100,
-            removeOnFail: 200
-          }
-        });
-        this.queues.set(queueName, queue);
-        logger.info(`[BullMQ] Initialized Queue: ${queueName} (Concurrency: ${QUEUE_CONFIGS[queueName].concurrency})`);
-      } catch (err: any) {
-        logger.warn(`[BullMQ] Redis connection warning for queue ${queueName}: ${err.message}`);
-      }
-    });
+  private async initializeQueues() {
+    if (typeof window !== 'undefined') return;
+
+    try {
+      const { Queue } = await import('bullmq');
+      const Redis = (await import('ioredis')).default;
+
+      const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+
+      QUEUE_NAMES.forEach((queueName) => {
+        try {
+          const connection = new Redis(redisUrl, {
+            maxRetriesPerRequest: null,
+            enableReadyCheck: false
+          });
+
+          const queue = new Queue(queueName, {
+            connection,
+            defaultJobOptions: {
+              attempts: QUEUE_CONFIGS[queueName].maxRetries,
+              backoff: { type: 'exponential', delay: 1000 },
+              removeOnComplete: 100,
+              removeOnFail: 200
+            }
+          });
+          this.queues.set(queueName, queue);
+          logger.info(`[BullMQ] Initialized Queue: ${queueName} (Concurrency: ${QUEUE_CONFIGS[queueName].concurrency})`);
+        } catch (err: any) {
+          logger.warn(`[BullMQ] Redis connection warning for queue ${queueName}: ${err.message}`);
+        }
+      });
+    } catch (err: any) {
+      logger.warn(`[BullMQ] Queue initialization warning: ${err.message}`);
+    }
   }
 
   private seedInitialJobs() {

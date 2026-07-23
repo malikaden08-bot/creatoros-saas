@@ -21,7 +21,7 @@ import {
   Subtitles,
   Sparkles
 } from 'lucide-react';
-import { QueueName, QUEUE_NAMES, QUEUE_CONFIGS, UnifiedJobSnapshot } from '../../lib/queue/bullmq';
+import { QueueName, QUEUE_NAMES, QUEUE_CONFIGS, UnifiedJobSnapshot } from '../../lib/queue/types';
 
 export const QueueManagerDashboardView: React.FC = () => {
   const [selectedQueue, setSelectedQueue] = useState<QueueName | 'all'>('all');
@@ -48,7 +48,7 @@ export const QueueManagerDashboardView: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to fetch queues:', err);
-    } finally {
+    } fontally {
       setIsLoading(false);
     }
   };
