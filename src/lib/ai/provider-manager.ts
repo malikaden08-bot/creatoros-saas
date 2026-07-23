@@ -36,7 +36,7 @@ export type ProviderId =
   | 'elevenlabs'
   | 'deepgram';
 
-export type AIModality = 'text' | 'image' | 'video' | 'speech' | 'transcription' | 'seo';
+export type AIModality = 'text' | 'stream' | 'image' | 'video' | 'speech' | 'transcription' | 'seo';
 
 export type ProviderHealthStatus = 'operational' | 'degraded' | 'unconfigured' | 'offline';
 
@@ -91,6 +91,7 @@ export interface ExecutionMeta {
   failoverChain: ProviderId[];
   totalRetries: number;
   totalLatencyMs: number;
+  totalLatency: number;
   fromCache: boolean;
 }
 
@@ -223,7 +224,7 @@ export class ProviderManager {
     if (!envValidation.configured) {
       return {
         id,
-        name: id.toUpperCase(),
+        name: String(id).toUpperCase(),
         status: 'unconfigured',
         latencyMs: null,
         error: `${envValidation.missingKey} is missing or placeholder`,
@@ -346,7 +347,7 @@ export class ProviderManager {
     } catch (err: any) {
       return {
         id,
-        name: id.toUpperCase(),
+        name: String(id).toUpperCase(),
         status: 'degraded',
         latencyMs: Date.now() - start,
         error: err.message || 'Network check timeout',
@@ -357,7 +358,7 @@ export class ProviderManager {
 
     return {
       id,
-      name: id.toUpperCase(),
+      name: String(id).toUpperCase(),
       status: 'operational',
       latencyMs: Date.now() - start,
       error: null,
@@ -434,6 +435,7 @@ export class ProviderManager {
           failoverChain: [cached.provider as ProviderId],
           totalRetries: 0,
           totalLatencyMs: 0,
+          totalLatency: 0,
           fromCache: true
         }
       };
@@ -487,6 +489,7 @@ export class ProviderManager {
               failoverChain: chain,
               totalRetries,
               totalLatencyMs: latencyMs,
+              totalLatency: latencyMs,
               fromCache: false
             }
           };
@@ -538,13 +541,13 @@ export class ProviderManager {
         if (cached) {
           const pId = (cached.provider as ProviderId) || chain[0];
           controller.enqueue(
-            emit({ event: 'start', requestId, provider: pId, model: cached.model, fromCache: true } satisfies StreamStartEvent)
+            emit({ event: 'start', requestId, provider: pId as any, model: cached.model, fromCache: true } satisfies StreamStartEvent)
           );
 
           const fullText = cached.content;
           for (let i = 0; i < fullText.length; i += 4) {
             const delta = fullText.slice(i, i + 4);
-            controller.enqueue(emit({ event: 'chunk', delta, provider: pId } satisfies StreamChunkEvent));
+            controller.enqueue(emit({ event: 'chunk', delta, provider: pId as any } satisfies StreamChunkEvent));
             await new Promise((r) => setTimeout(r, 8));
           }
 
@@ -553,7 +556,7 @@ export class ProviderManager {
             emit({
               event: 'done',
               requestId,
-              provider: pId,
+              provider: pId as any,
               model: cached.model,
               tokenUsage: cached.tokenUsage,
               creditsDeducted: 5,
@@ -572,7 +575,7 @@ export class ProviderManager {
 
           try {
             controller.enqueue(
-              emit({ event: 'start', requestId, provider: providerId, model: 'auto' } satisfies StreamStartEvent)
+              emit({ event: 'start', requestId, provider: providerId as any, model: 'auto' } satisfies StreamStartEvent)
             );
 
             const response = await providerObj.chat(options);
@@ -581,7 +584,7 @@ export class ProviderManager {
             const fullText = response.content;
             for (let i = 0; i < fullText.length; i += 4) {
               const delta = fullText.slice(i, i + 4);
-              controller.enqueue(emit({ event: 'chunk', delta, provider: providerId } satisfies StreamChunkEvent));
+              controller.enqueue(emit({ event: 'chunk', delta, provider: providerId as any } satisfies StreamChunkEvent));
               await new Promise((r) => setTimeout(r, 10));
             }
 
@@ -593,7 +596,7 @@ export class ProviderManager {
               emit({
                 event: 'done',
                 requestId,
-                provider: providerId,
+                provider: providerId as any,
                 model: response.model,
                 tokenUsage: response.tokenUsage,
                 creditsDeducted: 5,
@@ -694,6 +697,7 @@ export class ProviderManager {
             failoverChain: chain,
             totalRetries: 0,
             totalLatencyMs: latencyMs,
+            totalLatency: latencyMs,
             fromCache: false
           }
         };
@@ -735,6 +739,7 @@ export class ProviderManager {
           throw new Error(`Video generation provider ${providerId} is unconfigured`);
         }
 
+        const latencyMs = Date.now() - startTime;
         return {
           data: response,
           meta: {
@@ -743,7 +748,8 @@ export class ProviderManager {
             attemptedProviders: attempted,
             failoverChain: chain,
             totalRetries: 0,
-            totalLatencyMs: Date.now() - startTime,
+            totalLatencyMs: latencyMs,
+            totalLatency: latencyMs,
             fromCache: false
           }
         };
@@ -808,6 +814,7 @@ export class ProviderManager {
               failoverChain: chain,
               totalRetries: 0,
               totalLatencyMs: latencyMs,
+              totalLatency: latencyMs,
               fromCache: false
             }
           };
@@ -852,7 +859,7 @@ export class ProviderManager {
               provider: 'deepgram',
               model: dgResult.model,
               segments: dgResult.segments,
-              language: dgResult.language,
+              language: (dgResult as any).language || 'en',
               latencyMs,
               costUsd: 0.0043
             },
@@ -863,12 +870,14 @@ export class ProviderManager {
               failoverChain: chain,
               totalRetries: 0,
               totalLatencyMs: latencyMs,
+              totalLatency: latencyMs,
               fromCache: false
             }
           };
         } else if (providerId === 'groq') {
           const groqRes = await this.textProviders.groq.subtitle({ audioUrl: options.audioUrl });
           const segments = JSON.parse(groqRes.content);
+          const latencyMs = Date.now() - startTime;
 
           return {
             data: {
@@ -884,7 +893,8 @@ export class ProviderManager {
               attemptedProviders: attempted,
               failoverChain: chain,
               totalRetries: 0,
-              totalLatencyMs: Date.now() - startTime,
+              totalLatencyMs: latencyMs,
+              totalLatency: latencyMs,
               fromCache: false
             }
           };
