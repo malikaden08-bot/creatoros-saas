@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { AdminHeader } from './AdminHeader';
 import { SystemHealthMonitorView } from './SystemHealthMonitorView';
 import { AIMetricsDashboardView } from './AIMetricsDashboardView';
+import { QueueManagerDashboardView } from './QueueManagerDashboardView';
 import { UserRoleManagementView } from './UserRoleManagementView';
 import { BillingPaymentsAdminView } from './BillingPaymentsAdminView';
 import { ApiKeysFeatureFlagsView } from './ApiKeysFeatureFlagsView';
@@ -25,6 +26,7 @@ export const AdminLayout = () => {
         <SegmentedTabs
           tabs={[
             { id: 'system-health', label: 'Live System & AI Health', badge: 'LIVE' },
+            { id: 'queues', label: 'BullMQ Queue Engine', badge: '6' },
             { id: 'ai-metrics', label: 'AI Telemetry & Metrics', badge: 'STATS' },
             { id: 'ai-providers', label: 'AI Provider Settings', badge: 'AI' },
             { id: 'users', label: 'Users & Roles (RBAC)', badge: '4' },
@@ -39,6 +41,7 @@ export const AdminLayout = () => {
       </div>
 
       {activeTab === 'system-health' && <SystemHealthMonitorView />}
+      {activeTab === 'queues' && <QueueManagerDashboardView />}
       {activeTab === 'ai-metrics' && <AIMetricsDashboardView />}
       {activeTab === 'ai-providers' && <AIProviderSettingsView />}
       {activeTab === 'users' && <UserRoleManagementView />}
