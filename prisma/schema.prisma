@@ -1,4 +1,3 @@
-// prisma/schema.prisma
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -8,11 +7,171 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  role      String   @default("USER")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+enum MediaType {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  AI_MODEL
+}
+
+enum StorageProvider {
+  CLOUDINARY
+  R2
+  S3
+  PASSTHROUGH
+}
+
+enum SharePermission {
+  VIEWER
+  EDITOR
+  ADMIN
+}
+
+model MediaFolder {
+  id          String       @id @default(cuid())
+  name        String
+  parentId    String?
+  parent      MediaFolder?  @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children    MediaFolder[] @relation("FolderHierarchy")
+  workspaceId String       @default("ws-default")
+  ownerId     String       @default("usr-1")
+  color       String?      @default("#6366f1")
+  icon        String?      @default("folder")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  assets      MediaAsset[]
+
+  @@index([workspaceId, ownerId])
+  @@index([parentId])
+}
+
+model MediaCollection {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  workspaceId String       @default("ws-default")
+  ownerId     String       @default("usr-1")
+  isPublic    Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  assets      MediaAsset[]
+
+  @@index([workspaceId, ownerId])
+}
+
+model MediaAsset {
+  id             String           @id @default(cuid())
+  title          String
+  description    String?
+  fileType       MediaType        @default(IMAGE)
+  mimeType       String           @default("image/png")
+  sizeBytes      Int              @default(0)
+  url            String
+  cdnUrl         String?
+  thumbnailUrl   String?
+  storageBucket  String           @default("default")
+  storageProvider StorageProvider @default(CLOUDINARY)
+  
+  width          Int?
+  height         Int?
+  durationSec    Float?
+  
+  prompt         String?
+  negativePrompt String?
+  aiProvider     String?
+  model          String?
+  seed           Int?
+  steps          Int?
+  aspectRatio    String?
+  creditsCost    Int              @default(0)
+  latencyMs      Int              @default(0)
+  
+  folderId       String?
+  folder         MediaFolder?     @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  collectionId   String?
+  collection     MediaCollection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  ownerId        String           @default("usr-1")
+  workspaceId    String           @default("ws-default")
+  
+  isFavorite     Boolean          @default(false)
+  isArchived     Boolean          @default(false)
+  isDeleted      Boolean          @default(false)
+  deletedAt      DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  versions       MediaVersion[]
+  tags           MediaTag[]
+  shares         MediaShare[]
+  comments       MediaComment[]
+  favorites      MediaFavorite[]
+
+  @@index([workspaceId, ownerId])
+  @@index([folderId])
+  @@index([fileType])
+  @@index([isDeleted, isFavorite])
+}
+
+model MediaVersion {
+  id              String          @id @default(cuid())
+  assetId         String
+  asset           MediaAsset      @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  versionNumber   Int
+  url             String
+  cdnUrl          String?
+  storageProvider StorageProvider @default(CLOUDINARY)
+  sizeBytes       Int             @default(0)
+  changeSummary   String?
+  createdById     String          @default("usr-1")
+  createdAt       DateTime        @default(now())
+
+  @@unique([assetId, versionNumber])
+}
+
+model MediaTag {
+  id        String     @id @default(cuid())
+  name      String
+  assetId   String
+  asset     MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([name])
+}
+
+model MediaShare {
+  id               String          @id @default(cuid())
+  assetId          String
+  asset            MediaAsset      @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  sharedWithUserId String?
+  permission       SharePermission @default(VIEWER)
+  accessLinkToken  String          @unique @default(cuid())
+  expiresAt        DateTime?
+  createdAt        DateTime        @default(now())
+
+  @@index([assetId])
+}
+
+model MediaComment {
+  id          String     @id @default(cuid())
+  assetId     String
+  asset       MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  userId      String
+  userName    String     @default("Creator User")
+  text        String
+  timestampMs Int?
+  createdAt   DateTime   @default(now())
+
+  @@index([assetId])
+}
+
+model MediaFavorite {
+  id        String     @id @default(cuid())
+  assetId   String
+  asset     MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime   @default(now())
+
+  @@unique([assetId, userId])
 }
