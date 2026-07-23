@@ -6,13 +6,18 @@ import { CREDIT_COSTS } from '../../../../config/ai.config';
 import { formatAiErrorResponse } from '../../../../services/errorHandler';
 import { DatabaseService } from '../../../../services/database';
 
+const optionalUrl = z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+  z.string().url().optional()
+);
+
 const VideoRequestSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required.'),
   mode: z.enum(['text-to-video', 'image-to-video', 'video-to-video', 'lip-sync', 'frame-interpolation', 'motion-brush', 'upscale']).optional().default('text-to-video'),
   provider: z.enum(['auto', 'runway', 'luma', 'fal', 'replicate']).optional().default('auto'),
-  imageUrl: z.string().url().optional(),
-  videoUrl: z.string().url().optional(),
-  lipSyncAudioUrl: z.string().url().optional(),
+  imageUrl: optionalUrl,
+  videoUrl: optionalUrl,
+  lipSyncAudioUrl: optionalUrl,
   durationSeconds: z.number().min(3).max(15).optional().default(5),
   aspectRatio: z.enum(['16:9', '9:16', '1:1']).optional().default('16:9'),
   motionStrength: z.number().min(0).max(1).optional().default(0.5),

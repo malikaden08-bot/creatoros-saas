@@ -1,11 +1,16 @@
+/**
+ * SQL Injection Detection & Neutralizer
+ * Patterns require actual SQL attack context (quotes, semicolons, comment sequences)
+ * to avoid false-positives on creative AI generation prompts.
+ */
 export class SqlInjectionSanitizer {
   private static SQL_PATTERNS = [
-    /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|EXEC|UNION)\b)/i,
-    /(--|\/\*|\*\/|;)/,
-    /(\bOR\b\s+[\w']+\s*=\s*[\w']+)/i,
-    /(\bAND\b\s+[\w']+\s*=\s*[\w']+)/i,
-    /(' OR '1'='1|' OR 1=1)/i,
-    /(xp_cmdshell|exec\s+master)/i
+    /(--|\/\*|\*\/)/,
+    /('\s*(OR|AND)\s*'[^']*'\s*=\s*')/i,
+    /\b(OR|AND)\s+\d+\s*=\s*\d+\b/i,
+    /\bUNION\s+(ALL\s+)?SELECT\b/i,
+    /(xp_cmdshell|exec\s+master|sp_executesql)/i,
+    /;\s*(DROP|INSERT|DELETE|UPDATE|ALTER|CREATE)\s+/i
   ];
 
   public static containsSqlInjection(input: string): boolean {
