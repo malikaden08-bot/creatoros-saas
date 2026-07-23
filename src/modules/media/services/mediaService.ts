@@ -12,6 +12,7 @@ import {
   MediaVersionRecord
 } from '../types';
 import { logger } from '../../../services/logger';
+import { SecurityAuditLogger } from '../../../services/security/auditLogger';
 
 export class MediaService {
   private static instance: MediaService;
@@ -78,7 +79,16 @@ export class MediaService {
     };
 
     VersionManager.addVersion(asset, asset.url, 'Initial creation V1', asset.ownerId);
+
     this.inMemoryAssets.set(asset.id, asset);
+
+    SecurityAuditLogger.logEvent({
+      eventType: 'MEDIA_ASSET_CREATED',
+      severity: 'INFO',
+      userId: asset.ownerId,
+      details: `Created media asset "${asset.title}" (${asset.fileType}) via ${asset.storageProvider}`
+    });
+
     logger.info({ assetId: asset.id, title: asset.title }, '[MediaService] Asset created successfully');
     return asset;
   }
