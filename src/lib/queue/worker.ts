@@ -82,6 +82,25 @@ export class CreatorOSJobWorker {
         status: 'active', progress: 80, timestamp: new Date().toISOString()
       });
 
+      logger.info({ jobId: job.id }, '[Worker] Ingesting Asset into Media Service & Database');
+      const { mediaService } = await import('../../modules/media/services/mediaService');
+
+      const mamsAsset = await mediaService.createAsset({
+        title: job.name,
+        fileType: assetType === 'video' ? 'VIDEO' : assetType === 'document' ? 'DOCUMENT' : 'IMAGE',
+        url: storageUrl || 'https://cdn.creatoros.io/assets/default',
+        cdnUrl: storageUrl || 'https://cdn.creatoros.io/assets/default',
+        sizeBytes: 1024 * 1024,
+        aiMetadata: {
+          prompt: job.data?.prompt || job.name,
+          aiProvider: rawResult.provider || 'auto',
+          model: rawResult.model || 'standard',
+          creditsCost: 100,
+          latencyMs: Date.now() - startTime
+        },
+        tags: [job.queueName, 'async-queued']
+      });
+
       const dbRecord = await DatabaseService.saveAsset({
         userId: job.data?.userId || 'usr-1', assetType, provider: rawResult.provider || 'auto',
         model: rawResult.model || 'standard', prompt: job.data?.prompt || job.name,
@@ -89,7 +108,7 @@ export class CreatorOSJobWorker {
       });
 
       const finalResult = {
-        jobId: job.id, dbAssetId: dbRecord.id, assetType,
+        jobId: job.id, dbAssetId: dbRecord.id, mamsAssetId: mamsAsset.id, assetType,
         provider: rawResult.provider, model: rawResult.model, storageUrl, rawResult, latencyMs: Date.now() - startTime
       };
 
